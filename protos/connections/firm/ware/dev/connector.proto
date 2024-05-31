@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package connections.firm.ware.dev;
+
+enum WiFiSignalRating {
+  WIFI_SIGNAL_STRENGTH_UNKNOWN = 0;
+  WIFI_SIGNAL_STRENGTH_NONE = 1;
+  WIFI_SIGNAL_STRENGTH_POOR = 2;
+  WIFI_SIGNAL_STRENGTH_FAIR = 3;
+  WIFI_SIGNAL_STRENGTH_GOOD = 4;
+  WIFI_SIGNAL_STRENGTH_EXCELLENT = 5;
+}
+
+// Enum for different types of WiFi security
+enum WiFiSecurityType {
+  WIFI_SECURITY_UNKNOWN = 0;     // Unknown security type
+  WIFI_SECURITY_OPEN = 1;          // No security
+  WIFI_SECURITY_WEP = 2;           // Wired Equivalent Privacy
+  WIFI_SECURITY_WPA_PSK = 3;       // WiFi Protected Access with Pre-Shared Key
+  WIFI_SECURITY_WPA2_PSK = 4;      // WiFi Protected Access 2 with Pre-Shared Key
+  WIFI_SECURITY_WPA3_PSK = 5;      // WiFi Protected Access 3 with Pre-Shared Key
+  WIFI_SECURITY_WPA_EAP = 6;       // WPA with Extensible Authentication Protocol (Enterprise)
+  WIFI_SECURITY_WPA2_EAP = 7;      // WPA2 with Extensible Authentication Protocol (Enterprise)
+  WIFI_SECURITY_WPA3_EAP = 8;      // WPA3 with Extensible Authentication Protocol (Enterprise)
+}
+
+// Configuration for networks using EAP (Extensible Authentication Protocol)
+message WiFiEAPConfig {
+  WiFiEAPMethod method = 1;                  // EAP method used
+  string identity = 2;                   // Identity (username) for EAP
+  string anonymous_identity = 3;         // Anonymous identity, used in some EAP methods
+  string password = 4;                   // Password for EAP
+  string ca_certificate = 5;             // Certificate Authority certificate
+  string client_certificate = 6;         // Client certificate
+  string private_key = 7;                // Private key corresponding to the client certificate
+}
+
+// Supported EAP methods
+enum WiFiEAPMethod {
+  WIFI_EAP_PEAP = 0;          // Protected EAP
+  WIFI_EAP_TLS = 1;           // EAP-Transport Layer Security
+  WIFI_EAP_TTLS = 2;          // Tunneled Transport Layer Security
+  WIFI_EAP_PWD = 3;           // EAP-Password
+  WIFI_EAP_SIM = 4;           // EAP-SIM
+  WIFI_EAP_AKA = 5;           // EAP-AKA
+}
+
+message WiFiAccessPoint {
+  string SSID = 1;
+  string BSSID = 2;
+  int32 RSSI = 3;
+  int32 frequency = 4;
+  int32 channel = 5;
+  WiFiSignalRating signal_rating = 6;
+  WiFiSecurityType security_type = 7;
+  WiFiEAPConfig eap_config = 8;
+}
+
+
+message WiFiScanResult {
+  repeated WiFiAccessPoint access_points = 1;
+}
+
+message WiFiScanRequest {
+  int32 max_time_seconds = 1;
+
+  // optionally specify the network interface to use
+  string network_interface = 2;
+}
+
+message WiFiScanResponse {
+  WiFiScanResult scan_result = 1;
+}
+
+message WiFiConnectRequest {
+  string SSID = 1;
+  oneof secret {
+    bool is_open = 2;
+    string password = 3;
+    WiFiEAPConfig eap_config = 4;
+  }
+}
+
+message WiFiConnectResponse {
+  bool success = 1;
+}
+
+message WiFiDisconnectRequest {
+  string SSID = 1;
+}
+
+message WiFiDisconnectResponse {}
+
+message WiFiGetStatusRequest {}
+
+message WiFiGetStatusResponse {
+  string SSID = 1;
+  int32 RSSI = 2;
+  int32 frequency = 3;
+  int32 channel = 4;
+  WiFiSignalRating signal_rating = 5;
+}
+
+service WiFiService {
+  rpc Scan(WiFiScanRequest) returns (WiFiScanResponse) {}
+  rpc Connect(WiFiConnectRequest) returns (WiFiConnectResponse) {}
+  rpc Disconnect(WiFiDisconnectRequest) returns (WiFiDisconnectResponse) {}
+  rpc GetStatus(WiFiGetStatusRequest) returns (WiFiGetStatusResponse) {}
+}
