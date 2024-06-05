@@ -5,9 +5,9 @@ managed:
     default: github.com/uinta-labs/iotnetlab/gen
 plugins:
   # Go
-  - plugin: buf.build/protocolbuffers/go
+  - plugin: go
     out: gen
     opt: paths=source_relative
-  - plugin: buf.build/bufbuild/connect-go
+  - plugin: connect-go
     out: gen
     opt: paths=source_relative

@@ -8,11 +8,14 @@ import (
 	"os"
 	"time"
 
-	connect_go "github.com/bufbuild/connect-go"
+	"connectrpc.com/connect"
+	"connectrpc.com/grpcreflect"
 	"github.com/caarlos0/env/v10"
 	"github.com/godbus/dbus/v5"
 	"github.com/pkg/errors"
 	"github.com/rs/cors"
+	"golang.org/x/net/http2"
+	"golang.org/x/net/http2/h2c"
 
 	"github.com/uinta-labs/iotnetlab/gen/protos/connections/firm/ware/dev"
 	"github.com/uinta-labs/iotnetlab/gen/protos/connections/firm/ware/dev/devconnect"
@@ -80,7 +83,7 @@ type wifiServer struct {
 	dbusConn *dbus.Conn
 }
 
-func (w wifiServer) Scan(ctx context.Context, c *connect_go.Request[dev.WiFiScanRequest]) (*connect_go.Response[dev.WiFiScanResponse], error) {
+func (w wifiServer) Scan(ctx context.Context, c *connect.Request[dev.WiFiScanRequest]) (*connect.Response[dev.WiFiScanResponse], error) {
 	var maxScanTimeSeconds int = 0
 	if c.Msg.MaxTimeSeconds > 0 {
 		maxScanTimeSeconds = int(c.Msg.MaxTimeSeconds)
@@ -96,7 +99,7 @@ func (w wifiServer) Scan(ctx context.Context, c *connect_go.Request[dev.WiFiScan
 		return nil, err
 	}
 
-	return &connect_go.Response[dev.WiFiScanResponse]{
+	return &connect.Response[dev.WiFiScanResponse]{
 		Msg: &dev.WiFiScanResponse{
 			ScanResult: &dev.WiFiScanResult{
 				AccessPoints: accessPoints,
@@ -106,7 +109,7 @@ func (w wifiServer) Scan(ctx context.Context, c *connect_go.Request[dev.WiFiScan
 
 }
 
-func (w wifiServer) Connect(ctx context.Context, c *connect_go.Request[dev.WiFiConnectRequest]) (*connect_go.Response[dev.WiFiConnectResponse], error) {
+func (w wifiServer) Connect(ctx context.Context, c *connect.Request[dev.WiFiConnectRequest]) (*connect.Response[dev.WiFiConnectResponse], error) {
 	connectionCtx, cancelConnectionCtx := context.WithTimeout(ctx, time.Minute)
 	defer cancelConnectionCtx()
 
@@ -115,7 +118,7 @@ func (w wifiServer) Connect(ctx context.Context, c *connect_go.Request[dev.WiFiC
 		return nil, err
 	}
 
-	return &connect_go.Response[dev.WiFiConnectResponse]{
+	return &connect.Response[dev.WiFiConnectResponse]{
 		Msg: &dev.WiFiConnectResponse{
 			//🤷
 			Success: true,
@@ -123,12 +126,12 @@ func (w wifiServer) Connect(ctx context.Context, c *connect_go.Request[dev.WiFiC
 	}, nil
 }
 
-func (w wifiServer) Disconnect(ctx context.Context, c *connect_go.Request[dev.WiFiDisconnectRequest]) (*connect_go.Response[dev.WiFiDisconnectResponse], error) {
+func (w wifiServer) Disconnect(ctx context.Context, c *connect.Request[dev.WiFiDisconnectRequest]) (*connect.Response[dev.WiFiDisconnectResponse], error) {
 	//TODO implement me
 	panic("implement me")
 }
 
-func (w wifiServer) GetStatus(ctx context.Context, c *connect_go.Request[dev.WiFiGetStatusRequest]) (*connect_go.Response[dev.WiFiGetStatusResponse], error) {
+func (w wifiServer) GetStatus(ctx context.Context, c *connect.Request[dev.WiFiGetStatusRequest]) (*connect.Response[dev.WiFiGetStatusResponse], error) {
 	//TODO implement me
 	panic("implement me")
 }
@@ -196,9 +199,25 @@ func main() {
 
 	httpMux := http.NewServeMux()
 
-	baseURL, connectHandler := devconnect.NewWiFiServiceHandler(srv)
-	log.Printf("Binding WiFiService to %s\n", baseURL)
-	httpMux.Handle(baseURL, connectHandler)
+	reflector := grpcreflect.NewStaticReflector(
+		"connections.firm.ware.dev.WiFiService",
+		"connections.firm.ware.dev.TimeService",
+	)
+	httpMux.Handle(grpcreflect.NewHandlerV1(reflector))
+	httpMux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
+
+	{
+		baseURL, connectHandler := devconnect.NewWiFiServiceHandler(srv)
+		log.Printf("Binding WiFiService to %s\n", baseURL)
+		httpMux.Handle(baseURL, connectHandler)
+	}
+
+	{
+		timeSrv := internal.NewTimeServer(conn)
+		baseURL, connectHandler := devconnect.NewTimeServiceHandler(timeSrv)
+		log.Printf("Binding TimeService to %s\n", baseURL)
+		httpMux.Handle(baseURL, connectHandler)
+	}
 
 	cfg, err := ReadConfig()
 	if err != nil {
@@ -238,7 +257,7 @@ func main() {
 	withCors := corsConfig.Handler(withLogging)
 	httpServer := http.Server{
 		Addr:              cfg.Host + ":" + cfg.Port,
-		Handler:           withCors,
+		Handler:           h2c.NewHandler(withCors, &http2.Server{}),
 		ReadTimeout:       time.Second * 30,
 		WriteTimeout:      time.Second * 30,
 		IdleTimeout:       time.Second * 60,

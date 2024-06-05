@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package connections.firm.ware.dev;
+
+import "google/protobuf/timestamp.proto";
+
+message Timezone {
+  string id = 1;
+  string name = 2;
+  int32 offset_minutes = 3;
+}
+
+message GetTimezonesRequest {}
+
+message GetTimezonesResponse {
+  repeated Timezone timezones = 1;
+}
+
+message SetTimezoneRequest {
+  string timezone = 1;
+}
+
+message SetTimezoneResponse {}
+
+message GetCurrentTimeRequest {}
+
+message GetCurrentTimeResponse {
+  google.protobuf.Timestamp time = 1;
+  Timezone timezone = 2;
+}
+
+message SetCurrentTimeRequest {
+  google.protobuf.Timestamp time = 1;
+}
+
+message SetCurrentTimeResponse {}
+
+
+service TimeService {
+  rpc GetTimezones(GetTimezonesRequest) returns (GetTimezonesResponse) {}
+  rpc SetTimezone(SetTimezoneRequest) returns (SetTimezoneResponse) {}
+  rpc GetCurrentTime(GetCurrentTimeRequest) returns (GetCurrentTimeResponse) {}
+  rpc SetCurrentTime(SetCurrentTimeRequest) returns (SetCurrentTimeResponse) {}
+}
