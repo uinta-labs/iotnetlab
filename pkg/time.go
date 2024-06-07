@@ -1,13 +1,14 @@
-package internal
+package pkg
 
 import (
 	"context"
 	"fmt"
-	"google.golang.org/protobuf/types/known/timestamppb"
 	"time"
 
 	"connectrpc.com/connect"
 	"github.com/godbus/dbus/v5"
+	"google.golang.org/protobuf/types/known/timestamppb"
+
 	"github.com/uinta-labs/iotnetlab/gen/protos/connections/firm/ware/dev"
 	"github.com/uinta-labs/iotnetlab/gen/protos/connections/firm/ware/dev/devconnect"
 )

@@ -19,49 +19,8 @@ import (
 
 	"github.com/uinta-labs/iotnetlab/gen/protos/connections/firm/ware/dev"
 	"github.com/uinta-labs/iotnetlab/gen/protos/connections/firm/ware/dev/devconnect"
-	"github.com/uinta-labs/iotnetlab/internal"
+	"github.com/uinta-labs/iotnetlab/pkg"
 )
-
-//func pamAuth(serviceName, username string) error {
-//	transaction, err := pam.StartFunc(serviceName, username, func(s pam.Style, msg string) (string, error) {
-//		if s == pam.PromptEchoOff || s == pam.PromptEchoOn {
-//			var response string
-//			fmt.Printf("%s: ", msg)
-//			fmt.Scanln(&response)
-//			return response, nil
-//		}
-//		return "", fmt.Errorf("unrecognized PAM message style")
-//	})
-//	if err != nil {
-//		return err
-//	}
-//
-//	if err := transaction.Authenticate(0); err != nil {
-//		return err
-//	}
-//
-//	return nil
-//}
-//
-//func ensurePermissions(ctx context.Context) error {
-//	euid := os.Geteuid()
-//	if euid != 0 {
-//		log.Printf("Not running as root (EUID=%d), attempting to authenticate with PAM\n", euid)
-//
-//		err := pamAuth(os.Args[0], "root")
-//		if err != nil {
-//			return errors.Wrap(err, "failed to authenticate with PAM")
-//		}
-//
-//		// now check if we are root
-//		if _, err := exec.CommandContext(ctx, "id", "-u").Output(); err != nil {
-//			return errors.New("failed to authenticate as root")
-//		}
-//	}
-//	log.Println("Running with an effective UID of 0")
-//
-//	return nil
-//}
 
 func loggingMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -69,14 +28,6 @@ func loggingMiddleware(next http.Handler) http.Handler {
 		next.ServeHTTP(w, r)
 		log.Printf("%s %s %s", r.Method, r.URL.Path, time.Since(startTime))
 	})
-}
-
-// WiFiNetwork represents a single WiFi network.
-type WiFiNetwork struct {
-	SSID      string `json:"ssid"`
-	Frequency uint32 `json:"frequency"`
-	Strength  uint8  `json:"strength"`
-	Security  string `json:"security"`
 }
 
 type wifiServer struct {
@@ -94,7 +45,7 @@ func (w wifiServer) Scan(ctx context.Context, c *connect.Request[dev.WiFiScanReq
 	scanCtx, cancelScanCtx := context.WithTimeout(ctx, time.Second*time.Duration(maxScanTimeSeconds))
 	defer cancelScanCtx()
 
-	accessPoints, err := internal.WifiScan(scanCtx, w.dbusConn, "")
+	accessPoints, err := pkg.WifiScan(scanCtx, w.dbusConn, "")
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +64,7 @@ func (w wifiServer) Connect(ctx context.Context, c *connect.Request[dev.WiFiConn
 	connectionCtx, cancelConnectionCtx := context.WithTimeout(ctx, time.Minute)
 	defer cancelConnectionCtx()
 
-	err := internal.ConnectWiFi(connectionCtx, w.dbusConn, c.Msg)
+	err := pkg.ConnectWiFi(connectionCtx, w.dbusConn, c.Msg)
 	if err != nil {
 		return nil, err
 	}
@@ -176,14 +127,14 @@ func main() {
 	defer conn.Close()
 
 	if *hotspotSSID != "" && *hotspotPass != "" {
-		err := internal.StartHotspot(ctx, conn, *hotspotSSID, *hotspotPass, *hotspotInterface)
+		err := pkg.StartHotspot(ctx, conn, *hotspotSSID, *hotspotPass, *hotspotInterface)
 		if err != nil {
 			log.Fatalf("Failed to start hotspot: %v", err)
 		}
 	}
 
 	if *modeScan {
-		accessPoints, err := internal.WifiScan(ctx, conn, *scanInterface)
+		accessPoints, err := pkg.WifiScan(ctx, conn, *scanInterface)
 		if err != nil {
 			log.Fatalf("Failed to scan for WiFi networks: %v", err)
 		}
@@ -202,6 +153,7 @@ func main() {
 	reflector := grpcreflect.NewStaticReflector(
 		"connections.firm.ware.dev.WiFiService",
 		"connections.firm.ware.dev.TimeService",
+		"connections.firm.ware.dev.ConnectivityService",
 	)
 	httpMux.Handle(grpcreflect.NewHandlerV1(reflector))
 	httpMux.Handle(grpcreflect.NewHandlerV1Alpha(reflector))
@@ -213,9 +165,16 @@ func main() {
 	}
 
 	{
-		timeSrv := internal.NewTimeServer(conn)
+		timeSrv := pkg.NewTimeServer(conn)
 		baseURL, connectHandler := devconnect.NewTimeServiceHandler(timeSrv)
 		log.Printf("Binding TimeService to %s\n", baseURL)
+		httpMux.Handle(baseURL, connectHandler)
+	}
+
+	{
+		connectivitySrv := pkg.NewConnectivityServer()
+		baseURL, connectHandler := devconnect.NewConnectivityServiceHandler(connectivitySrv)
+		log.Printf("Binding ConnectivityService to %s\n", baseURL)
 		httpMux.Handle(baseURL, connectHandler)
 	}
 

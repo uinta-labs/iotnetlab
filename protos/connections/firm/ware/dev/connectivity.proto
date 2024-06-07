@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package connections.firm.ware.dev;
+
+
+service ConnectivityService {
+  rpc InternetConnectivityCheck(InternetConnectivityCheckRequest) returns (InternetConnectivityCheckResponse) {}
+}
+
+message InternetConnectivityCheckRequest {
+  int32 timeout_millis = 1;
+}
+
+message InternetConnectivityCheckResponse {
+  bool is_connected = 1;
+}
